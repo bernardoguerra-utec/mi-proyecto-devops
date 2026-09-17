@@ -11,22 +11,16 @@ pipeline {
         IMAGE_TAG = "${BUILD_NUMBER}"
         CONTAINER_NAME = 'mi-contenedor-web'
 
-        // Reemplazar por la IP real de la VM Ubuntu destino.
-        VM_IP = '10.204.217.248'
+        VM_IP = '192.168.1.100'
         VM_USER = 'deploy'
+        SSH_CREDS = 'ssh-vm-destino'
 
-        // ID de la credencial SSH guardada en Jenkins.
-        SSH_CREDS = 'WxYITDOS1qZHQToC15GYfi+us67M1vHf3r+jUWaj5CM'
-
-        // Puerto publicado en la VM Ubuntu destino.
         HOST_PORT = '80'
         CONTAINER_PORT = '80'
 
-        // Ruta temporal utilizada en el servidor Jenkins y en el destino.
         IMAGE_ARCHIVE = "mi-app-web-${BUILD_NUMBER}.tar"
         REMOTE_ARCHIVE = "/tmp/mi-app-web-${BUILD_NUMBER}.tar"
 
-        // URL validada desde la VM destino.
         HEALTH_URL = 'http://localhost:80/'
     }
 
@@ -34,7 +28,7 @@ pipeline {
         stage('Descargar código') {
             steps {
                 git branch: 'main',
-                    url: 'https://github.com/bernardoguerra-utec/tallerdevops'
+                    url: 'https://github.com/bernardoguerra-utec/mi-proyecto-devops.git'
             }
         }
 
@@ -60,7 +54,7 @@ pipeline {
             }
         }
 
-        stage('Enviar imagen a servidor destino') {
+        stage('Enviar imagen a VM destino') {
             steps {
                 withCredentials([
                     sshUserPrivateKey(
@@ -107,9 +101,9 @@ pipeline {
                               --format '{{.Image}}' \
                               | head -n 1 || true)
 
-                            echo \\"Imagen anterior: \\\${PREVIOUS_IMAGE:-ninguna}\\" 
+                            echo \\"Imagen anterior: \\\${PREVIOUS_IMAGE:-ninguna}\\"
 
-                            echo 'Deteniendo contenedor anterior...'
+                            echo 'Eliminando contenedor anterior...'
                             docker rm -f ${CONTAINER_NAME} 2>/dev/null || true
 
                             echo 'Iniciando contenedor nuevo...'
@@ -149,12 +143,10 @@ pipeline {
                                 --restart unless-stopped \
                                 -p ${HOST_PORT}:${CONTAINER_PORT} \
                                 \\\$PREVIOUS_IMAGE
-
-                              rm -f ${REMOTE_ARCHIVE}
-                              exit 1
+                            else
+                              echo 'No existe una imagen previa para restaurar.'
                             fi
 
-                            echo 'No existe una imagen previa para restaurar.'
                             rm -f ${REMOTE_ARCHIVE}
                             exit 1
                           "
@@ -170,7 +162,7 @@ pipeline {
         }
 
         failure {
-            echo 'El pipeline falló. Revisar los logs de Jenkins; si había una versión previa, se intentó restaurar mediante rollback.'
+            echo 'El pipeline falló. Revisar los logs; se ejecutó rollback si existía una imagen previa.'
         }
 
         always {
